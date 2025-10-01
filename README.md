@@ -8,7 +8,8 @@
   [![npm version](https://badge.fury.io/js/%40usex%2Fdisposable-email-domains.svg)](https://www.npmjs.com/package/@usex/disposable-email-domains)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![Tests](https://github.com/ali-master/disposable-email-domains/actions/workflows/test.yml/badge.svg)](https://github.com/ali-master/disposable-email-domains/actions)
+
+<a href="https://www.producthunt.com/products/github-192?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-detecting&#0045;disposable&#0045;email&#0045;addresses" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1021628&theme=light&t=1759345731657" alt="Detecting&#0032;disposable&#0032;email&#0032;addresses - A&#0032;powerful&#0032;SDK&#0032;for&#0032;detecting&#0032;disposable&#0032;email&#0032;addresses | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 </div>
 
 ---
