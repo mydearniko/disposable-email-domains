@@ -2,8 +2,10 @@ name: 🔄 Auto Sync Disposable Email Domains
 
 on:
   schedule:
-    # Run twice daily at 6 AM and 6 PM UTC
-    - cron: '0 6,18 * * *'
+    # Run twice daily at 6:05 AM and 6:05 PM UTC
+    # Using minute offset (5) to avoid GitHub Actions queue saturation at top of the hour
+    # This helps ensure the workflow runs reliably at scheduled times
+    - cron: '5 6,18 * * *'
   workflow_dispatch:
     inputs:
       force_sync:
