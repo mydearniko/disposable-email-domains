@@ -1,287 +1,431 @@
-/**
- * Basic Email Validation Examples
- *
- * This example demonstrates the fundamental usage of the DisposableEmailChecker
- * with default settings and basic configuration options.
- */
-
-import {
-  DisposableEmailChecker,
-  createEmailChecker,
-  quickCheck,
-  quickCheckBatch,
-} from "../../src/client";
+import { DisposableEmailChecker, EmailValidator, SmtpValidator } from "../../src/client";
 
 /**
- * Example 1: Simple email validation
+ * Basic Usage Examples for Disposable Email Domains SDK
+ * 
+ * ⚠️  NOTE: This is a comprehensive all-in-one example file.
+ * For better learning experience, check out the organized examples in separate files:
+ * 
+ * 📚 Recommended Examples:
+ *   - 01-basic-checking.ts       → Simple disposable email detection
+ *   - 02-dns-validation.ts       → DNS/MX record validation
+ *   - 03-smtp-validation.ts      → SMTP deliverability testing
+ *   - 04-batch-processing.ts     → Batch operations & performance
+ *   - 05-advanced-configuration.ts → Advanced configuration options
+ *   - 06-performance-monitoring.ts → Performance & optimization
+ * 
+ * 📖 See examples/client/README.md for detailed documentation
+ * 
+ * This file includes SMTP validation examples and comprehensive usage patterns.
  */
-export async function basicEmailValidation() {
-  console.log("🚀 Basic Email Validation Example\n");
 
-  // Create checker with DNS validation enabled
-  const checker = new DisposableEmailChecker({
-    checkMxRecord: true,
-  });
+// =============================================================================
+// 1. BASIC DISPOSABLE EMAIL CHECKING
+// =============================================================================
 
-  // Test various email addresses
-  const testEmails = [
-    "user@gmail.com", // Valid, trusted domain
-    "test@10minutemail.com", // Disposable
-    "invalid-email", // Invalid format
-    "user@mytempmail.org", // Disposable
-    "admin@company.com", // Valid business email
+async function basicDisposableCheck() {
+  console.log("\n🔍 Basic Disposable Email Checking");
+  console.log("=====================================");
+
+  const checker = new DisposableEmailChecker();
+
+  const emails = [
+    "user@gmail.com",
+    "test@10minutemail.com",
+    "admin@tempmail.org",
+    "contact@company.com",
   ];
 
-  for (const email of testEmails) {
+  for (const email of emails) {
     const result = await checker.checkEmail(email);
-
-    console.log(`📧 Email: ${email}`);
-    console.log(`   ✅ Valid: ${result.isValid}`);
-    console.log(`   🗑️ Disposable: ${result.isDisposable}`);
-    console.log(`   🎯 Confidence: ${result.confidence}%`);
-    console.log(`   ⚡ Time: ${result.validationTime.toFixed(2)}ms`);
-
-    // Display DNS validation results if available
-    if (result.dnsValidation) {
-      console.log(`   🌐 DNS Validation:`);
-      console.log(`      📬 Has MX: ${result.dnsValidation.hasMx}`);
-      if (result.dnsValidation.mxRecords.length > 0) {
-        console.log(`      📋 MX Records: ${result.dnsValidation.mxRecords.length} found`);
-        result.dnsValidation.mxRecords.forEach((mx, index) => {
-          console.log(`         ${index + 1}. ${mx.exchange} (priority: ${mx.priority})`);
-        });
-      }
-      console.log(`      🛡️ SPF Record: ${result.dnsValidation.hasSpf}`);
-      console.log(`      🔒 DMARC Policy: ${result.dnsValidation.hasDmarc}`);
-      console.log(`      🔌 SMTP Connectable: ${result.dnsValidation.isConnectable}`);
-      console.log(`      ⏱️ DNS Time: ${result.dnsValidation.dnsValidationTime.toFixed(2)}ms`);
-    }
-
-    if (result.errors.length > 0) {
-      console.log(`   ❌ Errors: ${result.errors.join(", ")}`);
-    }
-
-    if (result.warnings.length > 0) {
-      console.log(`   ⚠️ Warnings: ${result.warnings.join(", ")}`);
-    }
-
+    console.log(`📧 ${email}`);
+    console.log(`   Valid: ${result.isValid}`);
+    console.log(`   Disposable: ${result.isDisposable}`);
+    console.log(`   Confidence: ${result.confidence}%`);
+    console.log(`   Match Type: ${result.matchType}`);
     console.log("");
   }
-
-  // Get performance metrics
-  const metrics = checker.getMetrics();
-  console.log("📊 Performance Metrics:");
-  console.log(`   Total validations: ${metrics.totalValidations}`);
-  console.log(
-    `   Success rate: ${((metrics.successfulValidations / metrics.totalValidations) * 100).toFixed(1)}%`,
-  );
-  console.log(`   Disposable detected: ${metrics.disposableDetected}`);
-  console.log(`   Average time: ${metrics.averageValidationTime.toFixed(2)}ms`);
-  console.log(`   Throughput: ${metrics.throughputPerSecond.toFixed(0)} emails/sec\n`);
 }
 
-/**
- * Example 2: Using convenience functions
- */
-export async function convenienceFunctions() {
-  console.log("🛠️ Convenience Functions Example\n");
+// =============================================================================
+// 2. STANDALONE SMTP VALIDATOR USAGE
+// =============================================================================
 
-  // Quick single email check
-  const result1 = await quickCheck("test@tempmail.org");
-  console.log("Quick check result:", {
-    email: result1.email,
-    isDisposable: result1.isDisposable,
-    confidence: result1.confidence,
+async function standaloneSmtpValidation() {
+  console.log("\n📨 Standalone SMTP Validation");
+  console.log("===============================");
+
+  // Initialize SMTP validator with custom configuration
+  const smtpValidator = new SmtpValidator({
+    timeout: 10000,
+    port: 25,
+    fromEmail: "test@yourdomain.com",
+    helo: "mail.yourdomain.com",
   });
 
-  // Batch processing with convenience function
-  const emails = ["user1@gmail.com", "temp@10minutemail.com", "business@company.co.uk"];
-
-  const batchResults = await quickCheckBatch(emails);
-  console.log("\nBatch results:");
-  batchResults.forEach((result) => {
-    console.log(
-      `  ${result.email}: ${result.isDisposable ? "Disposable" : "Clean"} (${result.confidence}%)`,
-    );
-  });
-
-  // Using factory function with custom config
-  const customChecker = createEmailChecker({
-    strictValidation: true,
-    enablePatternMatching: true,
-    trustedDomains: ["gmail.com", "company.com"],
-  });
-
-  const strictResult = await customChecker.checkEmail("a@test.co");
-  console.log("\nStrict validation result:", {
-    isValid: strictResult.isValid,
-    errors: strictResult.errors,
-  });
-}
-
-/**
- * Example 3: Batch processing and reporting
- */
-export async function batchProcessingExample() {
-  console.log("📊 Batch Processing and Reporting Example\n");
-
-  const checker = new DisposableEmailChecker({
-    enableCaching: true,
-    cacheType: "memory",
-    cacheConfig: {
-      maxSize: 1000,
-      defaultTtl: 30 * 60 * 1000, // 30 minutes
-    },
-  });
-
-  // Large batch of emails
-  const emailBatch = [
-    "user1@gmail.com",
-    "temp1@10minutemail.com",
-    "user2@yahoo.com",
-    "fake@tempmail.org",
-    "business@company.com",
-    "test@guerrillamail.com",
-    "admin@outlook.com",
-    "spam@throaway.email",
-    "contact@startup.io",
-    "noreply@service.com",
+  const emails = [
+    "real.user@gmail.com",
+    "nonexistent@gmail.com",
+    "test@fakefakedomaindoesnotexist.com",
   ];
 
-  // Process batch
-  const results = await checker.checkEmailsBatch(emailBatch);
+  console.log("Testing email deliverability via SMTP...\n");
 
-  // Generate detailed report
-  const report = await checker.generateValidationReport(emailBatch);
+  for (const email of emails) {
+    try {
+      const result = await smtpValidator.validateEmail(email);
 
-  console.log("📋 Validation Report:");
-  console.log(`   Total emails: ${report.summary.total}`);
-  console.log(`   Valid emails: ${report.summary.valid}`);
-  console.log(`   Invalid emails: ${report.summary.invalid}`);
-  console.log(`   Disposable emails: ${report.summary.disposable}`);
-  console.log(`   Allowed emails: ${report.summary.allowed}`);
-  console.log(`   Blacklisted emails: ${report.summary.blacklisted}\n`);
+      console.log(`📧 ${email}`);
+      console.log(`   SMTP Valid: ${result.isValid}`);
+      console.log(`   Deliverable: ${result.isMailboxValid}`);
+      console.log(`   Response Code: ${result.responseCode || "N/A"}`);
+      console.log(`   Server Response: ${result.responseMessage || "N/A"}`);
+      console.log(`   Validation Time: ${result.validationTime}ms`);
 
-  console.log("⚡ Performance:");
-  console.log(`   Total time: ${report.performance.totalTime.toFixed(2)}ms`);
-  console.log(`   Average per email: ${report.performance.averageTimePerEmail.toFixed(2)}ms`);
-  console.log(`   Throughput: ${report.performance.throughput.toFixed(0)} emails/sec\n`);
+      if (result.errors.length > 0) {
+        console.log(`   Errors: ${result.errors.join(", ")}`);
+      }
 
-  // Cache statistics
-  const cacheStats = await checker.getCacheStats();
-  console.log("💾 Cache Statistics:");
-  console.log(`   Cache size: ${cacheStats.size}`);
-  console.log(`   Hit rate: ${cacheStats.hitRate.toFixed(1)}%`);
-  console.log(`   Total entries: ${cacheStats.entries}\n`);
+      if (result.warnings.length > 0) {
+        console.log(`   Warnings: ${result.warnings.join(", ")}`);
+      }
 
-  // Export detailed statistics
-  const statsJson = await checker.exportStatistics();
-  console.log("📤 Exported statistics (sample):");
-  const stats = JSON.parse(statsJson);
-  console.log("   Domain counts:", stats.domainCounts);
-  console.log("   Configuration:", {
-    cacheType: stats.configuration.cacheType,
-    indexingStrategy: stats.configuration.indexingStrategy,
-    enableSubdomainChecking: stats.configuration.enableSubdomainChecking,
-  });
+      console.log("");
+    } catch (error) {
+      console.log(
+        `📧 ${email} - Error: ${error instanceof Error ? error.message : "Unknown error"}\n`,
+      );
+    }
+  }
 }
 
-/**
- * Example 4: Advanced configuration
- */
-export async function advancedConfiguration() {
-  console.log("⚙️ Advanced Configuration Example\n");
+// =============================================================================
+// 3. DNS + SMTP VALIDATION WITH EMAIL VALIDATOR
+// =============================================================================
 
+async function dnsAndSmtpValidation() {
+  console.log("\n🌐 Combined DNS + SMTP Validation");
+  console.log("===================================");
+
+  // Initialize EmailValidator with both DNS and SMTP configuration
+  const emailValidator = new EmailValidator(
+    false, // strict validation
+    {
+      timeout: 5000,
+      retries: 2,
+      validateMxConnectivity: true,
+      checkSpfRecord: true,
+      checkDmarcRecord: true,
+    },
+    {
+      timeout: 8000,
+      port: 25,
+      fromEmail: "test@yourdomain.com",
+      helo: "mail.yourdomain.com",
+    },
+  );
+
+  const testEmails = ["valid@gmail.com", "test@microsoft.com", "fake@nonexistentdomain12345.com"];
+
+  for (const email of testEmails) {
+    try {
+      console.log(`🔍 Validating: ${email}`);
+
+      const result = await emailValidator.validateEmailDeliverability(email);
+
+      console.log(`   Overall Valid: ${result.overallValid}`);
+
+      // DNS Validation Results
+      console.log(`   DNS Results:`);
+      console.log(`     Has MX: ${result.dnsValidation.hasMx}`);
+      console.log(`     MX Records: ${result.dnsValidation.mxRecords.length}`);
+      console.log(`     Has SPF: ${result.dnsValidation.hasSpf}`);
+      console.log(`     Has DMARC: ${result.dnsValidation.hasDmarc}`);
+      console.log(`     Is Connectable: ${result.dnsValidation.isConnectable}`);
+
+      // SMTP Validation Results (if available)
+      if (result.smtpValidation) {
+        console.log(`   SMTP Results:`);
+        console.log(`     Is Valid: ${result.smtpValidation.isValid}`);
+        console.log(`     Is Deliverable: ${result.smtpValidation.isMailboxValid}`);
+        console.log(`     Response Code: ${result.smtpValidation.responseCode || "N/A"}`);
+        console.log(`     Server Tested: ${result.smtpValidation.mxRecord || "N/A"}`);
+      }
+
+      console.log("");
+    } catch (error) {
+      console.log(`   Error: ${error instanceof Error ? error.message : "Unknown error"}\n`);
+    }
+  }
+}
+
+// =============================================================================
+// 4. DISPOSABLE EMAIL CHECKER WITH SMTP VALIDATION
+// =============================================================================
+
+async function disposableCheckerWithSmtp() {
+  console.log("\n🛡️ Disposable Email Checker with SMTP Validation");
+  console.log("==================================================");
+
+  // Initialize with comprehensive configuration including SMTP
   const checker = new DisposableEmailChecker({
-    // Validation options
-    strictValidation: true,
+    strictValidation: false,
+    checkMxRecord: true,
+    checkSmtpDeliverability: true,
     enableSubdomainChecking: true,
     enablePatternMatching: true,
-    checkMxRecord: false, // Requires DNS resolution implementation
 
-    // Performance options
-    enableCaching: true,
-    cacheType: "memory",
-    enableIndexing: true,
-    indexingStrategy: "hybrid", // Uses both trie and bloom filter
-
-    // Data sources
-    localDataPath: "data/domains.txt",
-    allowlistPath: "config/custom-allowlist.txt",
-    blacklistPath: "config/custom-blacklist.txt",
-
-    // Cache configuration
-    cacheConfig: {
-      maxSize: 5000,
-      defaultTtl: 60 * 60 * 1000, // 1 hour
-      cleanupInterval: 15 * 60 * 1000, // 15 minutes
+    // DNS validation configuration
+    dnsValidation: {
+      timeout: 5000,
+      retries: 3,
+      enableCaching: true,
+      cacheSize: 5000,
+      cacheTtl: 300000, // 5 minutes
+      validateMxConnectivity: true,
+      checkSpfRecord: true,
+      checkDmarcRecord: true,
     },
 
-    // Custom patterns and trusted domains
-    customPatterns: [
-      /^noreply@/i, // No-reply addresses
-      /^admin@.*\.temp$/i, // Admin on temp domains
-      /\d{8,}@/, // Long numeric prefixes
-    ],
-    trustedDomains: ["gmail.com", "outlook.com", "company.com", "university.edu"],
+    // SMTP validation configuration
+    smtpValidation: {
+      timeout: 10000,
+      port: 25,
+      fromEmail: "test@yourdomain.com",
+      helo: "mail.yourdomain.com",
+      retries: 2,
+      enableCaching: true,
+      cacheSize: 1000,
+      cacheTtl: 600000, // 10 minutes
+    },
+
+    // Performance optimization
+    enableCaching: true,
+    cacheSize: 10000,
+    enableIndexing: true,
+    indexingStrategy: "hybrid",
   });
 
-  // Test with various email types
-  const testCases = [
-    "user@gmail.com", // Trusted domain
-    "noreply@service.com", // Matches custom pattern
-    "user@sub.tempmail.org", // Subdomain check
-    "12345678@example.com", // Numeric pattern
-    "admin@company.temp", // Custom pattern match
+  const testEmails = [
+    "user@gmail.com", // Valid email
+    "test@10minutemail.com", // Disposable email
+    "admin@tempmail.org", // Disposable email
+    "contact@microsoft.com", // Valid corporate email
+    "fake@nonexistent123.com", // Invalid domain
+    "test@guerrillamail.com", // Disposable email
   ];
 
-  console.log("🧪 Testing advanced validation:");
-  for (const email of testCases) {
-    const result = await checker.checkEmail(email);
+  console.log("Comprehensive email validation with disposable checking and SMTP verification...\n");
 
-    console.log(`\n📧 ${email}:`);
-    console.log(
-      `   Status: ${result.isDisposable ? "🗑️ Disposable" : result.isAllowed ? "✅ Allowed" : "🟢 Clean"}`,
-    );
-    console.log(`   Match type: ${result.matchType}`);
-    console.log(`   Confidence: ${result.confidence}%`);
+  for (const email of testEmails) {
+    try {
+      const result = await checker.checkEmail(email);
 
-    if (result.source) {
-      console.log(`   Source: ${result.source}`);
-    }
+      console.log(`📧 ${email}`);
+      console.log(`   ✅ Valid Format: ${result.isValid}`);
+      console.log(`   🚫 Is Disposable: ${result.isDisposable}`);
+      console.log(`   ✅ Is Allowed: ${result.isAllowed}`);
+      console.log(`   🚫 Is Blacklisted: ${result.isBlacklisted}`);
+      console.log(`   🎯 Confidence: ${result.confidence}%`);
+      console.log(`   🔍 Match Type: ${result.matchType}`);
+      console.log(`   ⏱️ Validation Time: ${result.validationTime.toFixed(2)}ms`);
 
-    if (result.warnings.length > 0) {
-      console.log(`   Warnings: ${result.warnings.join("; ")}`);
+      // DNS validation details
+      if (result.dnsValidation) {
+        console.log(`   🌐 DNS Validation:`);
+        console.log(`     Has MX: ${result.dnsValidation.hasMx}`);
+        console.log(`     MX Records: ${result.dnsValidation.mxRecords.length}`);
+        if (result.dnsValidation.mxRecords.length > 0) {
+          result.dnsValidation.mxRecords.forEach((mx) => {
+            console.log(`       - ${mx.exchange} (priority: ${mx.priority})`);
+          });
+        }
+        console.log(`     Has SPF: ${result.dnsValidation.hasSpf}`);
+        console.log(`     Has DMARC: ${result.dnsValidation.hasDmarc}`);
+        console.log(`     Is Connectable: ${result.dnsValidation.isConnectable}`);
+      }
+
+      // SMTP validation details
+      if (result.smtpValidation) {
+        console.log(`   📨 SMTP Validation:`);
+        console.log(`     Is Valid: ${result.smtpValidation.isValid}`);
+        console.log(`     Is Deliverable: ${result.smtpValidation.isDeliverable}`);
+        console.log(`     Response Code: ${result.smtpValidation.responseCode || "N/A"}`);
+        console.log(`     Server Tested: ${result.smtpValidation.serverTested || "N/A"}`);
+        console.log(`     SMTP Time: ${result.smtpValidation.smtpValidationTime}ms`);
+      }
+
+      // Warnings and errors
+      if (result.warnings.length > 0) {
+        console.log(`   ⚠️ Warnings: ${result.warnings.join(", ")}`);
+      }
+
+      if (result.errors.length > 0) {
+        console.log(`   ❌ Errors: ${result.errors.join(", ")}`);
+      }
+
+      console.log("");
+    } catch (error) {
+      console.log(
+        `📧 ${email} - Error: ${error instanceof Error ? error.message : "Unknown error"}\n`,
+      );
     }
   }
-
-  // Demonstrate dynamic domain management
-  console.log("\n🔧 Dynamic Domain Management:");
-
-  // Add to custom allowlist
-  checker.addToAllowlist("newpartner.com");
-  const allowedResult = await checker.checkEmail("user@newpartner.com");
-  console.log(`   Added newpartner.com to allowlist: ${allowedResult.isAllowed}`);
-
-  // Add to custom blacklist
-  checker.addToBlacklist("suspicious.net");
-  const blockedResult = await checker.checkEmail("user@suspicious.net");
-  console.log(`   Added suspicious.net to blacklist: ${blockedResult.isBlacklisted}`);
 }
 
-// Run examples if called directly
-if (import.meta.main) {
-  console.log("📚 DisposableEmailChecker - Basic Usage Examples\n");
+// =============================================================================
+// 5. BATCH PROCESSING WITH SMTP
+// =============================================================================
+
+async function batchProcessingWithSmtp() {
+  console.log("\n📦 Batch Processing with SMTP Validation");
+  console.log("==========================================");
+
+  const checker = new DisposableEmailChecker({
+    checkMxRecord: true,
+    checkSmtpDeliverability: true,
+    smtpValidation: {
+      timeout: 8000,
+      retries: 1,
+    },
+  });
+
+  const emailBatch = [
+    "user1@gmail.com",
+    "user2@outlook.com",
+    "temp@10minutemail.com",
+    "test@guerrillamail.com",
+    "contact@microsoft.com",
+    "fake@nonexistent.com",
+  ];
+
+  console.log(`Processing batch of ${emailBatch.length} emails...\n`);
+
+  const startTime = Date.now();
+  const results = await checker.checkEmailsBatch(emailBatch);
+  const endTime = Date.now();
+
+  console.log(`Batch processing completed in ${endTime - startTime}ms\n`);
+
+  // Summary statistics
+  let validCount = 0;
+  let disposableCount = 0;
+  let deliverableCount = 0;
+
+  results.forEach((result, index) => {
+    console.log(`${index + 1}. ${result.email}`);
+    console.log(`   Valid: ${result.isValid}, Disposable: ${result.isDisposable}`);
+
+    if (result.smtpValidation) {
+      console.log(`   Deliverable: ${result.smtpValidation.isDeliverable}`);
+      if (result.smtpValidation.isDeliverable) deliverableCount++;
+    }
+
+    if (result.isValid) validCount++;
+    if (result.isDisposable) disposableCount++;
+    console.log("");
+  });
+
+  console.log("📊 Batch Summary:");
+  console.log(`   Total emails: ${emailBatch.length}`);
+  console.log(`   Valid format: ${validCount}`);
+  console.log(`   Disposable detected: ${disposableCount}`);
+  console.log(`   SMTP deliverable: ${deliverableCount}`);
+  console.log(`   Processing time: ${endTime - startTime}ms`);
+}
+
+// =============================================================================
+// 6. PERFORMANCE MONITORING
+// =============================================================================
+
+async function performanceMonitoring() {
+  console.log("\n📈 Performance Monitoring");
+  console.log("==========================");
+
+  const checker = new DisposableEmailChecker({
+    checkMxRecord: true,
+    checkSmtpDeliverability: true,
+    enableCaching: true,
+  });
+
+  // Process some emails first
+  await checker.checkEmail("test@gmail.com");
+  await checker.checkEmail("temp@10minutemail.com");
+  await checker.checkEmail("user@outlook.com");
+
+  // Get comprehensive statistics
+  const stats = checker.getStats();
+
+  console.log("Performance Metrics:");
+  console.log(`  Total validations: ${stats.performance.totalValidations}`);
+  console.log(`  Successful validations: ${stats.performance.successfulValidations}`);
+  console.log(`  Disposable detected: ${stats.performance.disposableDetected}`);
+  console.log(`  Average validation time: ${stats.performance.averageValidationTime.toFixed(2)}ms`);
+  console.log(`  Cache hit rate: ${(stats.performance.cacheHitRate * 100).toFixed(1)}%`);
+
+  if (stats.performance.dnsValidations) {
+    console.log(`  DNS validations: ${stats.performance.dnsValidations}`);
+    console.log(`  DNS success rate: ${(stats.performance.dnsSuccessRate! * 100).toFixed(1)}%`);
+    console.log(`  Average DNS time: ${stats.performance.averageDnsTime?.toFixed(2)}ms`);
+  }
+
+  if (stats.performance.smtpValidations) {
+    console.log(`  SMTP validations: ${stats.performance.smtpValidations}`);
+    console.log(`  SMTP success rate: ${(stats.performance.smtpSuccessRate! * 100).toFixed(1)}%`);
+    console.log(`  Average SMTP time: ${stats.performance.averageSmtpTime?.toFixed(2)}ms`);
+  }
+
+  console.log("\nDNS Statistics:");
+  console.log(`  Cache size: ${stats.dns.cacheSize}`);
+  console.log(`  Active requests: ${stats.dns.activeRequests}`);
+  console.log(`  Cache hit rate: ${(stats.dns.cacheHitRate * 100).toFixed(1)}%`);
+
+  console.log("\nSMTP Statistics:");
+  console.log(`  Cache size: ${stats.smtp.cacheSize}`);
+  console.log(`  Active requests: ${stats.smtp.activeRequests}`);
+  console.log(`  Cache hit rate: ${(stats.smtp.cacheHitRate * 100).toFixed(1)}%`);
+
+  // Cache statistics
+  const cacheStats = await stats.cache;
+  console.log("\nCache Statistics:");
+  console.log(`  Cache entries: ${cacheStats.entries}`);
+  console.log(`  Hit rate: ${(cacheStats.hitRate * 100).toFixed(1)}%`);
+}
+
+// =============================================================================
+// MAIN EXECUTION
+// =============================================================================
+
+async function runAllExamples() {
+  console.log("🚀 Disposable Email Domains SDK - Basic Usage Examples");
+  console.log("========================================================");
 
   try {
-    await basicEmailValidation();
-    await convenienceFunctions();
-    await batchProcessingExample();
-    await advancedConfiguration();
+    await basicDisposableCheck();
+    await standaloneSmtpValidation();
+    await dnsAndSmtpValidation();
+    await disposableCheckerWithSmtp();
+    await batchProcessingWithSmtp();
+    await performanceMonitoring();
 
-    console.log("✅ All examples completed successfully!");
+    console.log("\n✅ All examples completed successfully!");
   } catch (error) {
-    console.error("❌ Example failed:", error);
-    process.exit(1);
+    console.error("\n❌ Error running examples:", error);
   }
+}
+
+// Export individual functions for selective usage
+export {
+  basicDisposableCheck,
+  standaloneSmtpValidation,
+  dnsAndSmtpValidation,
+  disposableCheckerWithSmtp,
+  batchProcessingWithSmtp,
+  performanceMonitoring,
+  runAllExamples,
+};
+
+// Run all examples if this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runAllExamples().catch(console.error);
 }
