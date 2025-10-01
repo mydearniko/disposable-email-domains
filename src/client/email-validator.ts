@@ -1,5 +1,7 @@
 import type { EmailValidationResult } from "./types";
 import { DnsResolver, type DnsResolverConfig, type DnsValidationResult } from "./dns-resolver";
+import { SmtpValidator } from "./smtp";
+import type { SmtpValidationConfig, SmtpValidationResult } from "./types";
 
 // Pre-compiled patterns for better performance
 const EMAIL_REGEX =
@@ -21,16 +23,22 @@ const SUSPICIOUS_PATTERNS = Object.freeze([
 const SUSPICIOUS_DOMAIN_PATTERNS = Object.freeze([/-temp-/, /-fake-/, /temp\d+/, /\d{5,}/]);
 
 /**
- * Email validator for format validation and parsing with DNS validation
+ * Email validator for format validation and parsing with DNS and SMTP validation
  */
 export class EmailValidator {
   private strictValidation: boolean;
   private compiledCustomPatterns: RegExp[] = [];
   private dnsResolver: DnsResolver;
+  private smtpValidator: SmtpValidator;
 
-  constructor(strictValidation = false, dnsConfig?: Partial<DnsResolverConfig>) {
+  constructor(
+    strictValidation = false,
+    dnsConfig?: Partial<DnsResolverConfig>,
+    smtpConfig?: Partial<SmtpValidationConfig>,
+  ) {
     this.strictValidation = strictValidation;
     this.dnsResolver = new DnsResolver(dnsConfig);
+    this.smtpValidator = new SmtpValidator(smtpConfig);
   }
 
   /**
@@ -194,6 +202,92 @@ export class EmailValidator {
   }
 
   /**
+   * SMTP validation for email deliverability
+   */
+  async validateSmtpDeliverability(
+    email: string,
+    mxRecords?: Array<{ exchange: string; priority: number }>,
+  ): Promise<SmtpValidationResult> {
+    const mxRecordsFormatted = mxRecords?.map((mx) => ({
+      exchange: mx.exchange,
+      priority: mx.priority,
+    }));
+    return this.smtpValidator.validateEmail(email, mxRecordsFormatted);
+  }
+
+  /**
+   * Batch SMTP validation
+   */
+  async validateSmtpDeliverabilityBatch(
+    emails: string[],
+    mxRecordsMap?: Map<string, Array<{ exchange: string; priority: number }>>,
+  ): Promise<Map<string, SmtpValidationResult>> {
+    const results = new Map<string, SmtpValidationResult>();
+
+    // Process emails in chunks to avoid overwhelming mail servers
+    const chunkSize = 5;
+    for (let i = 0; i < emails.length; i += chunkSize) {
+      const chunk = emails.slice(i, i + chunkSize);
+      const chunkPromises = chunk.map((email) => {
+        const domain = email.split("@")[1];
+        const mxRecords = mxRecordsMap?.get(domain);
+        return this.validateSmtpDeliverability(email, mxRecords);
+      });
+
+      const chunkResults = await Promise.all(chunkPromises);
+      for (let j = 0; j < chunk.length; j++) {
+        results.set(chunk[j], chunkResults[j]);
+      }
+
+      // Add delay between chunks to be respectful to mail servers
+      if (i + chunkSize < emails.length) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Combined DNS and SMTP validation
+   */
+  async validateEmailDeliverability(email: string): Promise<{
+    email: string;
+    dnsValidation: DnsValidationResult;
+    smtpValidation?: SmtpValidationResult;
+    overallValid: boolean;
+  }> {
+    const domain = email.split("@")[1];
+    if (!domain) {
+      throw new Error("Invalid email format");
+    }
+
+    // First, perform DNS validation
+    const dnsResult = await this.dnsResolver.validateMxRecord(domain);
+
+    let smtpResult: SmtpValidationResult | undefined;
+    let overallValid = dnsResult.hasMx;
+
+    // If DNS validation passes and we have MX records, perform SMTP validation
+    if (dnsResult.hasMx && dnsResult.mxRecords.length > 0) {
+      try {
+        smtpResult = await this.validateSmtpDeliverability(email, dnsResult.mxRecords);
+        overallValid = dnsResult.hasMx && smtpResult.isMailboxValid;
+      } catch (error) {
+        // SMTP validation failed, but we still have DNS validation
+        overallValid = dnsResult.hasMx;
+      }
+    }
+
+    return {
+      email,
+      dnsValidation: dnsResult,
+      smtpValidation: smtpResult,
+      overallValid,
+    };
+  }
+
+  /**
    * Set strict validation mode
    */
   setStrictValidation(strict: boolean): void {
@@ -208,7 +302,14 @@ export class EmailValidator {
   }
 
   /**
-   * Get validation statistics including DNS stats
+   * Update SMTP validator configuration
+   */
+  updateSmtpConfig(newConfig: Partial<SmtpValidationConfig>): void {
+    this.smtpValidator.updateConfig(newConfig);
+  }
+
+  /**
+   * Get validation statistics including DNS and SMTP stats
    */
   getStats(): {
     dnsStats: {
@@ -217,16 +318,24 @@ export class EmailValidator {
       queuedRequests: number;
       cacheHitRate: number;
     };
+    smtpStats: {
+      cacheSize: number;
+      activeRequests: number;
+      queuedRequests: number;
+      cacheHitRate: number;
+    };
   } {
     return {
       dnsStats: this.dnsResolver.getStats(),
+      smtpStats: this.smtpValidator.getStats(),
     };
   }
 
   /**
-   * Clear DNS cache
+   * Clear all caches
    */
-  clearDnsCache(): void {
+  clearAllCaches(): void {
     this.dnsResolver.clearCache();
+    this.smtpValidator.clearCache();
   }
 }

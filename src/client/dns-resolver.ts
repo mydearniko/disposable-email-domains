@@ -1,14 +1,18 @@
+import { promises as dns } from "dns";
 import { promisify } from "util";
-import { resolve, resolveMx, resolveTxt, resolveNs } from "dns";
 import { debug as createDebugger } from "debug";
+import type { MxRecord, DnsValidationResult } from "./types.js";
+
+// Re-export types for external use
+export type { MxRecord, DnsValidationResult } from "./types.js";
 
 const debug = createDebugger("disposable-email:dns-resolver");
 
 // Promisified DNS functions
-const resolveMxAsync = promisify(resolveMx);
-const resolveTxtAsync = promisify(resolveTxt);
-const resolveNsAsync = promisify(resolveNs);
-const resolveAsync = promisify(resolve);
+const resolveMxAsync = promisify(dns.resolveMx);
+const resolveTxtAsync = promisify(dns.resolveTxt);
+const resolveNsAsync = promisify(dns.resolveNs);
+const resolveAsync = promisify(dns.resolve);
 
 export interface DnsResolverConfig {
   timeout: number;
@@ -22,23 +26,6 @@ export interface DnsResolverConfig {
   checkDmarcRecord: boolean;
   customDnsServers?: string[];
   fallbackDnsServers: string[];
-}
-
-export interface MxRecord {
-  exchange: string;
-  priority: number;
-}
-
-export interface DnsValidationResult {
-  domain: string;
-  hasMx: boolean;
-  mxRecords: MxRecord[];
-  hasSpf: boolean;
-  hasDmarc: boolean;
-  isConnectable: boolean;
-  validationTime: number;
-  errors: string[];
-  warnings: string[];
 }
 
 export interface DnsCache {
@@ -99,9 +86,11 @@ export class DnsResolver {
   }
 
   /**
-   *  MX record validation
+   * Validates a domain's DNS records for email delivery capability
+   * @param domain - The domain to validate
+   * @returns Promise<DnsValidationResult> - Validation results with MX, SPF, and DMARC status
    */
-  async validateMxRecord(domain: string): Promise<DnsValidationResult> {
+  async validateDomain(domain: string): Promise<DnsValidationResult> {
     const startTime = Date.now();
     const result: DnsValidationResult = {
       domain,
@@ -159,6 +148,15 @@ export class DnsResolver {
 
     result.validationTime = Date.now() - startTime;
     return result;
+  }
+
+  /**
+   * Validates MX records for a domain (alias for validateDomain)
+   * @param domain - The domain to validate
+   * @returns Promise<DnsValidationResult> - Validation results
+   */
+  async validateMxRecord(domain: string): Promise<DnsValidationResult> {
+    return this.validateDomain(domain);
   }
 
   /**
@@ -299,7 +297,7 @@ export class DnsResolver {
             ),
           ]);
 
-          return records;
+          return records as MxRecord[];
         } catch (error) {
           lastError = error as Error;
 
@@ -320,9 +318,9 @@ export class DnsResolver {
    */
   private async checkSpfRecord(domain: string): Promise<boolean> {
     try {
-      const txtRecords = await resolveTxtAsync(domain);
-      return txtRecords.some((records) =>
-        records.some((record) => record.toLowerCase().startsWith("v=spf1")),
+      const txtRecords = await resolveTxtAsync(domain) as string[][];
+      return txtRecords.some((records: string[]) =>
+        records.some((record: string) => record.toLowerCase().startsWith("v=spf1")),
       );
     } catch (error) {
       debug("SPF check failed for %s: %o", domain, error);
@@ -336,9 +334,9 @@ export class DnsResolver {
   private async checkDmarcRecord(domain: string): Promise<boolean> {
     try {
       const dmarcDomain = `_dmarc.${domain}`;
-      const txtRecords = await resolveTxtAsync(dmarcDomain);
-      return txtRecords.some((records) =>
-        records.some((record) => record.toLowerCase().startsWith("v=dmarc1")),
+      const txtRecords = await resolveTxtAsync(dmarcDomain) as string[][];
+      return txtRecords.some((records: string[]) =>
+        records.some((record: string) => record.toLowerCase().startsWith("v=dmarc1")),
       );
     } catch (error) {
       debug("DMARC check failed for %s: %o", domain, error);

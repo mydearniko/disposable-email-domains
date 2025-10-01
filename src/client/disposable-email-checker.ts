@@ -7,6 +7,8 @@ import type {
   ValidationReport,
   DomainInsights,
   BenchmarkResults,
+  DnsValidationResult,
+  SmtpValidationResult,
 } from "./types";
 import { TrieIndex } from "./trie-index";
 import { BloomFilter } from "./bloom-filter";
@@ -16,6 +18,7 @@ import { DataLoader } from "./data-loader";
 import { EmailValidator } from "./email-validator";
 import { DomainChecker } from "./domain-checker";
 import { AnalyticsEngine } from "./analytics-engine";
+import { FALLBACK_DNS_SERVERS } from "@root/client/constant";
 
 const debug = createDebugger("disposable-email:disposable-email-checker");
 
@@ -107,6 +110,7 @@ export class DisposableEmailChecker {
       blacklistPath: "config/blacklist.txt",
       strictValidation: false,
       checkMxRecord: false,
+      checkSmtpDeliverability: false,
       enableSubdomainChecking: true,
       enablePatternMatching: true,
       enableCaching: true,
@@ -126,7 +130,18 @@ export class DisposableEmailChecker {
         validateMxConnectivity: false,
         checkSpfRecord: false,
         checkDmarcRecord: false,
-        fallbackDnsServers: ["8.8.8.8", "1.1.1.1", "208.67.222.222"],
+        fallbackDnsServers: FALLBACK_DNS_SERVERS,
+      },
+      // SMTP validation defaults
+      smtpValidation: {
+        timeout: 10000,
+        port: 25,
+        fromEmail: "test@example.com",
+        helo: "mail.example.com",
+        retries: 2,
+        enableCaching: true,
+        cacheSize: 1000,
+        cacheTtl: 600000, // 10 minutes
       },
       // @ts-expect-error
       customPatterns: DisposableEmailChecker.EMPTY_PATTERNS,
@@ -149,10 +164,11 @@ export class DisposableEmailChecker {
     this.initializeCacheManager();
     this.metricsManager = new MetricsManager();
     this.dataLoader = new DataLoader();
-    // Initialize EmailValidator with DNS configuration
+    // Initialize EmailValidator with DNS and SMTP configuration
     this.emailValidator = new EmailValidator(
       this.config.strictValidation,
       this.config.dnsValidation,
+      this.config.smtpValidation,
     );
 
     // Initialize domain checker with empty sets (will be updated after data loading)
@@ -448,19 +464,20 @@ export class DisposableEmailChecker {
       }
     }
 
-    // Step 7: DNS record validation (or simple)
+    // Step 7: DNS record validation
+    let dnsResult: DnsValidationResult | undefined;
     if (this.config.checkMxRecord) {
       try {
-        // Check if DNS validation is enabled
+        // Check if advanced DNS validation is enabled
         const dnsConfig = this.config.dnsValidation;
-        const needsValidation =
+        const needsAdvancedValidation =
           dnsConfig?.validateMxConnectivity ||
           dnsConfig?.checkSpfRecord ||
           dnsConfig?.checkDmarcRecord;
 
-        if (needsValidation) {
-          //  DNS validation
-          const dnsResult = await this.emailValidator.validateMxRecord(domain);
+        if (needsAdvancedValidation) {
+          // Advanced DNS validation
+          dnsResult = await this.emailValidator.validateMxRecord(domain);
           result.dnsValidation = {
             hasMx: dnsResult.hasMx,
             mxRecords: dnsResult.mxRecords,
@@ -491,6 +508,47 @@ export class DisposableEmailChecker {
         }
       } catch (error) {
         result.warnings.push("Failed to check DNS records");
+      }
+    }
+
+    // Step 8: SMTP validation (if enabled and DNS passed)
+    if (this.config.checkSmtpDeliverability) {
+      try {
+        let smtpResult: SmtpValidationResult;
+
+        // If we have DNS results with MX records, pass them to SMTP validation
+        if (dnsResult && dnsResult.hasMx && dnsResult.mxRecords.length > 0) {
+          smtpResult = await this.emailValidator.validateSmtpDeliverability(
+            email,
+            dnsResult.mxRecords,
+          );
+        } else {
+          // Fallback to SMTP validation without pre-resolved MX records
+          smtpResult = await this.emailValidator.validateSmtpDeliverability(email);
+        }
+
+        result.smtpValidation = {
+          isValid: smtpResult.isValid,
+          isDeliverable: smtpResult.isMailboxValid,
+          responseCode: smtpResult.responseCode,
+          responseMessage: smtpResult.responseMessage,
+          smtpValidationTime: smtpResult.validationTime,
+          serverTested: smtpResult.mxRecord,
+        };
+
+        // Update overall validation based on SMTP results
+        if (!smtpResult.isMailboxValid) {
+          result.warnings.push("Email address does not appear to be deliverable");
+          result.confidence = Math.max(result.confidence, 70);
+        }
+
+        // Add SMTP-specific warnings and errors
+        result.warnings.push(...smtpResult.warnings);
+        if (smtpResult.errors.length > 0) {
+          result.warnings.push("SMTP validation encountered errors");
+        }
+      } catch (error) {
+        result.warnings.push("Failed to perform SMTP validation");
       }
     }
 
@@ -695,6 +753,15 @@ export class DisposableEmailChecker {
     // Update components that depend on config
     this.emailValidator.setStrictValidation(this.config.strictValidation);
 
+    // Update DNS and SMTP configurations
+    if (newConfig.dnsValidation) {
+      this.emailValidator.updateDnsConfig(newConfig.dnsValidation);
+    }
+
+    if (newConfig.smtpValidation) {
+      this.emailValidator.updateSmtpConfig(newConfig.smtpValidation);
+    }
+
     // Rebuild index if indexing strategy changed
     if (newConfig.indexingStrategy && this.config.enableIndexing) {
       void this.buildIndex();
@@ -738,29 +805,32 @@ export class DisposableEmailChecker {
   }
 
   /**
-   * Get statistics including DNS performance
+   * Get comprehensive statistics including DNS and SMTP performance
    */
   public getStats(): {
     performance: PerformanceMetrics;
     cache: Promise<CacheStats>;
     dns: ReturnType<EmailValidator["getStats"]>["dnsStats"];
+    smtp: ReturnType<EmailValidator["getStats"]>["smtpStats"];
     domains: ReturnType<DomainChecker["getDomainCounts"]>;
   } {
+    const emailValidatorStats = this.emailValidator.getStats();
     return {
       performance: this.getMetrics(),
       cache: this.getCacheStats(),
-      dns: this.emailValidator.getStats().dnsStats,
+      dns: emailValidatorStats.dnsStats,
+      smtp: emailValidatorStats.smtpStats,
       domains: this.domainChecker.getDomainCounts(),
     };
   }
 
   /**
-   * Clear all caches (email validation and DNS)
+   * Clear all caches (email validation, DNS, and SMTP)
    */
   public async clearAllCaches(): Promise<void> {
     await this.clearCache();
-    this.emailValidator.clearDnsCache();
+    this.emailValidator.clearAllCaches();
     this.domainChecker.clearCache();
-    debug("All caches cleared");
+    debug("All caches cleared including SMTP cache");
   }
 }

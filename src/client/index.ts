@@ -28,6 +28,10 @@ export type { DnsResolverConfig, MxRecord, DnsValidationResult, DnsCache } from 
 
 export { DnsResolver } from "./dns-resolver";
 
+// Export SMTP validator types and classes
+export type { SmtpValidationConfig, SmtpValidationResult } from "./types";
+export { SmtpValidator, verifyMailboxSMTP } from "./smtp";
+
 // Export main classes
 export { DisposableEmailChecker } from "./disposable-email-checker";
 

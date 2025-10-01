@@ -3,6 +3,59 @@
  */
 
 /**
+ * DNS record types for email validation
+ */
+export interface MxRecord {
+  exchange: string;
+  priority: number;
+}
+
+export interface DnsValidationResult {
+  domain: string;
+  hasMx: boolean;
+  mxRecords: MxRecord[];
+  hasSpf: boolean;
+  hasDmarc: boolean;
+  isConnectable: boolean;
+  validationTime: number;
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * SMTP validation configuration and results
+ */
+export interface SmtpValidationConfig {
+  timeout: number;
+  port: number;
+  fromEmail: string;
+  helo: string;
+  retries?: number;
+  enableCaching?: boolean;
+  cacheSize?: number;
+  cacheTtl?: number;
+}
+
+export interface SmtpValidationResult {
+  email: string;
+  domain: string;
+  isValid: boolean;
+  isMailboxValid: boolean;
+  mxRecord: string | null;
+  responseCode: number | null;
+  responseMessage: string | null;
+  validationTime: number;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface SmtpCache {
+  result: boolean | null;
+  timestamp: number;
+  ttl: number;
+}
+
+/**
  * Email validation result with detailed information
  */
 export interface EmailValidationResult {
@@ -28,6 +81,15 @@ export interface EmailValidationResult {
     isConnectable: boolean;
     dnsValidationTime: number;
   };
+  // SMTP validation results (optional)
+  smtpValidation?: {
+    isValid: boolean;
+    isDeliverable: boolean;
+    responseCode: number | null;
+    responseMessage: string | null;
+    smtpValidationTime: number;
+    serverTested: string | null;
+  };
 }
 
 /**
@@ -49,6 +111,10 @@ export interface PerformanceMetrics {
   dnsValidations?: number;
   dnsSuccessRate?: number;
   averageDnsTime?: number;
+  // SMTP metrics
+  smtpValidations?: number;
+  smtpSuccessRate?: number;
+  averageSmtpTime?: number;
 }
 
 /**
@@ -64,6 +130,7 @@ export interface EmailCheckerConfig {
   // Validation options
   strictValidation?: boolean;
   checkMxRecord?: boolean;
+  checkSmtpDeliverability?: boolean;
   enableSubdomainChecking?: boolean;
   enablePatternMatching?: boolean;
 
@@ -82,6 +149,18 @@ export interface EmailCheckerConfig {
     fallbackDnsServers?: string[];
   };
 
+  // SMTP validation options
+  smtpValidation?: {
+    timeout?: number;
+    port?: number;
+    fromEmail?: string;
+    helo?: string;
+    retries?: number;
+    enableCaching?: boolean;
+    cacheSize?: number;
+    cacheTtl?: number;
+  };
+
   // Performance options
   enableCaching?: boolean;
   cacheSize?: number;
@@ -89,18 +168,18 @@ export interface EmailCheckerConfig {
   indexingStrategy?: "trie" | "hash" | "bloom" | "hybrid";
 
   // Cache options
-  cacheType?: string; // 'memory', 'redis', 'database', 'filesystem', 'noop', etc.
+  cacheType?: string;
   cacheConfig?: {
     maxSize?: number;
     defaultTtl?: number;
     cleanupInterval?: number;
-    [key: string]: any; // Allow custom config properties
+    [key: string]: any;
   };
-  customCache?: any; // Custom cache instance implementing ICache interface
+  customCache?: any;
 
   // Update options
   autoUpdate?: boolean;
-  updateInterval?: number; // hours
+  updateInterval?: number;
 
   // Custom options
   customPatterns?: RegExp[];
@@ -164,4 +243,21 @@ export interface BenchmarkResults {
   trie: number;
   bloom: number;
   hybrid: number;
+}
+
+/**
+ * DNS Resolver Configuration
+ */
+export interface DnsResolverConfig {
+  timeout: number;
+  retries: number;
+  enableCaching: boolean;
+  cacheSize: number;
+  cacheTtl: number;
+  concurrency: number;
+  validateMxConnectivity: boolean;
+  checkSpfRecord: boolean;
+  checkDmarcRecord: boolean;
+  customDnsServers?: string[];
+  fallbackDnsServers: string[];
 }
